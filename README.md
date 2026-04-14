@@ -24,10 +24,10 @@ The ETL code is packaged as a Python package (`kmimic_meds`) intended for public
 
 ## Data Sources
 
-| Source | Description |
-|--------|-------------|
-| [Synthetic K-MIMIC (SYN-ICU)](https://khdp.net/database/data-search-detail/SYN-ICU) | Synthetic Korean ICU dataset published by KHDP |
-| [MIMIC-IV-MEDS](https://physionet.org/content/mimic-iv-demo-meds/0.0.1/) | Reference MEDS conversion of MIMIC-IV (used as model) |
+| Source                                                                              | Description                                           |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [Synthetic K-MIMIC (SYN-ICU)](https://khdp.net/database/data-search-detail/SYN-ICU) | Synthetic Korean ICU dataset published by KHDP        |
+| [MIMIC-IV-MEDS](https://physionet.org/content/mimic-iv-demo-meds/0.0.1/)            | Reference MEDS conversion of MIMIC-IV (used as model) |
 
 > Raw K-MIMIC data is **not included** in this repository. Download it from the KHDP portal and place the `.xlsx` files under `data/raw/`.
 
@@ -62,7 +62,7 @@ K-MIMIC-MEDS/
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/K-MIMIC-MEDS.git
+git clone https://github.com/ji-ch01/K-MIMIC-MEDS.git
 cd K-MIMIC-MEDS
 pip install -e .
 pip install openpyxl
@@ -77,6 +77,7 @@ pip install openpyxl
 Download the Synthetic K-MIMIC dataset from [KHDP](https://khdp.net/database/data-search-detail/SYN-ICU) and place all `.xlsx` files under `data/raw/`.
 
 Expected files:
+
 ```
 data/raw/
 ├── syn_admissions.xlsx
@@ -107,6 +108,7 @@ python src/kmimic_meds/etl/pre_meds.py \
 ```
 
 What it does:
+
 - Reads all 15 `.xlsx` source tables
 - Converts UUID string IDs to stable `int64` via SHA-256 hashing
 - Parses and normalizes timestamps (including mixed date/datetime formats)
@@ -126,6 +128,7 @@ python src/kmimic_meds/etl/meds_convert.py \
 ```
 
 What it does:
+
 - Extracts MEDS events from each source table
 - Builds hierarchical codes using `//` as separator (e.g. `CHARTEVENT//001C_102//mmHg`)
 - Assigns patients to `train` (80%), `tuning` (10%), `held_out` (10%) splits
@@ -161,45 +164,45 @@ data/output/
 
 Each row in the data files follows the MEDS schema:
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `subject_id` | `int64` | Unique patient identifier |
-| `time` | `timestamp[us]` | Timestamp of the event (`null` for static measurements) |
-| `code` | `string` | Event code (e.g. `CHARTEVENT//001C_102//mmHg`, `MEDS_BIRTH`) |
-| `numeric_value` | `float32` | Numeric value if applicable, otherwise `null` |
+| Column          | Type            | Description                                                  |
+| --------------- | --------------- | ------------------------------------------------------------ |
+| `subject_id`    | `int64`         | Unique patient identifier                                    |
+| `time`          | `timestamp[us]` | Timestamp of the event (`null` for static measurements)      |
+| `code`          | `string`        | Event code (e.g. `CHARTEVENT//001C_102//mmHg`, `MEDS_BIRTH`) |
+| `numeric_value` | `float32`       | Numeric value if applicable, otherwise `null`                |
 
 ### Event types and codes
 
-| Prefix | Source table | Example code |
-|--------|-------------|--------------|
-| `MEDS_BIRTH` | `syn_patients` | `MEDS_BIRTH` |
-| `MEDS_DEATH` | `syn_patients`, `syn_admissions` | `MEDS_DEATH` |
-| `GENDER` | `syn_patients` (static) | `GENDER//M` |
-| `HOSPITAL_ADMISSION` | `syn_admissions` | `HOSPITAL_ADMISSION//Emergency department` |
-| `HOSPITAL_DISCHARGE` | `syn_admissions` | `HOSPITAL_DISCHARGE//Home` |
-| `ICU_ADMISSION` | `syn_icustays` | `ICU_ADMISSION//SICU` |
-| `ICU_DISCHARGE` | `syn_icustays` | `ICU_DISCHARGE//RICU` |
-| `CHARTEVENT` | `syn_chartevents` | `CHARTEVENT//001C_1021_25105//회/min` |
-| `LAB` | `syn_labevents` | `LAB//001L3005//mg/dL` |
-| `DIAGNOSIS` | `syn_diagnoses_icd` (static) | `DIAGNOSIS//KCD8//I251` |
-| `PROCEDURE_ICD` | `syn_procedures_icd` | `PROCEDURE_ICD//ICD9CM//54.11` |
-| `INPUT_START` | `syn_inputevents` | `INPUT_START//001I_1315//cc` |
-| `OUTPUT` | `syn_outputevents` | `OUTPUT//001O_148//cc` |
-| `MEDICATION` | `syn_emar` | `MEDICATION//12005122` |
+| Prefix               | Source table                     | Example code                               |
+| -------------------- | -------------------------------- | ------------------------------------------ |
+| `MEDS_BIRTH`         | `syn_patients`                   | `MEDS_BIRTH`                               |
+| `MEDS_DEATH`         | `syn_patients`, `syn_admissions` | `MEDS_DEATH`                               |
+| `GENDER`             | `syn_patients` (static)          | `GENDER//M`                                |
+| `HOSPITAL_ADMISSION` | `syn_admissions`                 | `HOSPITAL_ADMISSION//Emergency department` |
+| `HOSPITAL_DISCHARGE` | `syn_admissions`                 | `HOSPITAL_DISCHARGE//Home`                 |
+| `ICU_ADMISSION`      | `syn_icustays`                   | `ICU_ADMISSION//SICU`                      |
+| `ICU_DISCHARGE`      | `syn_icustays`                   | `ICU_DISCHARGE//RICU`                      |
+| `CHARTEVENT`         | `syn_chartevents`                | `CHARTEVENT//001C_1021_25105//회/min`      |
+| `LAB`                | `syn_labevents`                  | `LAB//001L3005//mg/dL`                     |
+| `DIAGNOSIS`          | `syn_diagnoses_icd` (static)     | `DIAGNOSIS//KCD8//I251`                    |
+| `PROCEDURE_ICD`      | `syn_procedures_icd`             | `PROCEDURE_ICD//ICD9CM//54.11`             |
+| `INPUT_START`        | `syn_inputevents`                | `INPUT_START//001I_1315//cc`               |
+| `OUTPUT`             | `syn_outputevents`               | `OUTPUT//001O_148//cc`                     |
+| `MEDICATION`         | `syn_emar`                       | `MEDICATION//12005122`                     |
 
 ### Dataset statistics (SYN-ICU)
 
-| Metric | Value |
-|--------|-------|
-| Total events | 639,454 |
-| Total patients | 1,328 |
-| Static events (time = null) | 4,419 |
-| Dynamic events | 635,035 |
-| Events with numeric value | 605,941 |
-| Unique codes | 182 |
-| Train patients | 1,062 (80%) |
-| Tuning patients | 132 (10%) |
-| Held-out patients | 134 (10%) |
+| Metric                      | Value       |
+| --------------------------- | ----------- |
+| Total events                | 639,454     |
+| Total patients              | 1,328       |
+| Static events (time = null) | 4,419       |
+| Dynamic events              | 635,035     |
+| Events with numeric value   | 605,941     |
+| Unique codes                | 182         |
+| Train patients              | 1,062 (80%) |
+| Tuning patients             | 132 (10%)   |
+| Held-out patients           | 134 (10%)   |
 
 ---
 
