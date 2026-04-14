@@ -1,0 +1,47 @@
+# MEDS-Extract Event Mapping Configuration (MESSY file)
+# For K-MIMIC Synthetic ICU dataset
+#
+# This file will be completed once the K-MIMIC table structure is known.
+# Reference: https://medical-event-data-standard.github.io/docs/tutorials/kdd2025/converting_to_MEDS
+
+subject_id_col: subject_id
+
+# --- To be filled after K-MIMIC schema exploration ---
+# Example structure (based on MIMIC-IV mapping):
+#
+# patients:
+#   birth:
+#     code: MEDS_BIRTH
+#     time: col(birth_date)
+#     time_format: "%Y-%m-%d"
+#   death:
+#     code: MEDS_DEATH
+#     time: col(death_date)
+#     time_format: "%Y-%m-%d %H:%M:%S"
+#   gender:
+#     code: col(gender)
+#     time: null
+#
+# icu_stays:
+#   admission:
+#     code:
+#       - ICU_ADMISSION
+#       - col(care_unit)
+#     time: col(intime)
+#     time_format: "%Y-%m-%d %H:%M:%S"
+#   discharge:
+#     code:
+#       - ICU_DISCHARGE
+#       - col(care_unit)
+#     time: col(outtime)
+#     time_format: "%Y-%m-%d %H:%M:%S"
+#
+# chart_events:
+#   chartevent:
+#     code:
+#       - CHARTEVENT
+#       - col(item_id)
+#       - col(unit)
+#     time: col(chart_time)
+#     time_format: "%Y-%m-%d %H:%M:%S"
+#     numeric_value: value_num

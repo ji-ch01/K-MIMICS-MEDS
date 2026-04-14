@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "kmimic-meds"
+version = "0.1.0"
+description = "ETL pipeline to convert Synthetic K-MIMIC ICU data to the MEDS format"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "TBD" }
+
+dependencies = [
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    "polars>=0.20",
+    "meds>=0.3.3",
+    "MEDS-extract>=0.0.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+kmimic-pre-meds = "kmimic_meds.etl.pre_meds:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

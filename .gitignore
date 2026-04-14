@@ -1,0 +1,47 @@
+# Data — raw and intermediate files are not versioned
+data/raw/
+data/intermediate/
+data/output/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.installed.cfg
+
+# Virtual environments
+kmimics
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+.logs/
+
+# MEDS-Extract intermediate artifacts
+shard_events/
+convert_to_subject_sharded/
+convert_to_MEDS_events/
+merge_to_MEDS_cohort/
+
+# dotenv
+.env
