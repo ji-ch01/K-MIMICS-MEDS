@@ -49,12 +49,16 @@ SPLITS_SCHEMA = pa.schema([
     pa.field("split", pa.string()),
 ])
 
+# Valeurs considérées comme vides dans les colonnes source
+_EMPTY = ("", "nan", "None", "UNK", "NaN", "none", "null", "NULL")
+
 
 # ---------------------------------------------------------------------------
-# Event extractors — each returns a DataFrame with [subject_id, time, code, numeric_value]
+# Helpers
 # ---------------------------------------------------------------------------
 
 def make_row(subject_id, time, code, numeric_value=None):
+    """Crée un dictionnaire représentant une ligne MEDS."""
     return {
         "subject_id": subject_id,
         "time": time,
@@ -62,6 +66,35 @@ def make_row(subject_id, time, code, numeric_value=None):
         "numeric_value": float(numeric_value) if numeric_value is not None and pd.notna(numeric_value) else None,
     }
 
+
+def make_code(*parts):
+    """
+    Construit un code MEDS en joignant les parties avec //.
+    Les parties vides, nan, None, UNK sont ignorées.
+
+    Exemple :
+        make_code("CHARTEVENT", "001C_102", "회/min") -> "CHARTEVENT//001C_102//회/min"
+        make_code("HOSPITAL_ADMISSION", "nan", "Home") -> "HOSPITAL_ADMISSION//Home"
+    """
+    clean_parts = [
+        str(p).strip()
+        for p in parts
+        if p is not None and str(p).strip() not in _EMPTY
+    ]
+    return "//".join(clean_parts) if clean_parts else "UNKNOWN"
+
+
+def clean(val):
+    """Retourne None si la valeur est vide/nan, sinon retourne la valeur en string."""
+    s = str(val).strip()
+    return None if s in _EMPTY else s
+
+
+# ---------------------------------------------------------------------------
+# Event extractors
+# Chaque fonction lit une table intermédiaire et retourne un DataFrame
+# avec les colonnes [subject_id, time, code, numeric_value].
+# ---------------------------------------------------------------------------
 
 def extract_patients(df):
     rows = []
@@ -71,21 +104,20 @@ def extract_patients(df):
             continue
         sid = int(sid)
 
-        # birth
-        yob = str(r.get("year_of_birth", "")).strip()
-        if yob and yob not in ("nan", "None", "<NA>"):
+        # naissance — on construit un timestamp à partir de year_of_birth
+        yob = clean(r.get("year_of_birth", ""))
+        if yob:
             try:
-                birth_time = pd.Timestamp(f"{yob}-01-01 00:00:01")
-                rows.append(make_row(sid, birth_time, "MEDS_BIRTH"))
+                rows.append(make_row(sid, pd.Timestamp(f"{yob}-01-01 00:00:01"), "MEDS_BIRTH"))
             except Exception:
                 pass
 
-        # gender (static: time=NaT)
-        sex = str(r.get("sex", "")).strip()
-        if sex and sex not in ("nan", "None"):
-            rows.append(make_row(sid, pd.NaT, f"GENDER//{sex}"))
+        # genre — événement statique (time = NaT)
+        sex = clean(r.get("sex", ""))
+        if sex:
+            rows.append(make_row(sid, pd.NaT, make_code("GENDER", sex)))
 
-        # death
+        # décès
         dod = r.get("dod")
         if pd.notna(dod):
             rows.append(make_row(sid, pd.Timestamp(dod), "MEDS_DEATH"))
@@ -101,31 +133,37 @@ def extract_admissions(df):
             continue
         sid = int(sid)
 
-        adm_type = str(r.get("admission_type", "UNK")).strip()
-        adm_loc = str(r.get("admission_location", "UNK")).strip()
         adm_time = r.get("admittime")
         if pd.notna(adm_time):
-            rows.append(make_row(sid, adm_time, f"HOSPITAL_ADMISSION//{adm_type}//{adm_loc}"))
-
-            # demographics at admission time
+            # admission hospitalière
+            rows.append(make_row(
+                sid, adm_time,
+                make_code("HOSPITAL_ADMISSION", r.get("admission_type"), r.get("admission_location"))
+            ))
+            # données démographiques recueillies à l'admission
             for col, prefix in [
                 ("insurance", "INSURANCE"),
                 ("marital_status", "MARITAL_STATUS"),
                 ("ethnicity", "ETHNICITY"),
             ]:
-                val = str(r.get(col, "")).strip()
-                if val and val not in ("nan", "None"):
-                    rows.append(make_row(sid, adm_time, f"{prefix}//{val}"))
+                val = clean(r.get(col, ""))
+                if val:
+                    rows.append(make_row(sid, adm_time, make_code(prefix, val)))
 
-        dis_loc = str(r.get("discharge_location", "UNK")).strip()
+        # sortie hospitalière
         dis_time = r.get("dischtime")
         if pd.notna(dis_time):
-            rows.append(make_row(sid, dis_time, f"HOSPITAL_DISCHARGE//{dis_loc}"))
+            rows.append(make_row(
+                sid, dis_time,
+                make_code("HOSPITAL_DISCHARGE", r.get("discharge_location"))
+            ))
 
+        # décès en cours d'hospitalisation
         death_time = r.get("deathtime")
         if pd.notna(death_time):
             rows.append(make_row(sid, death_time, "MEDS_DEATH"))
 
+        # urgences
         edreg = r.get("edregtime")
         if pd.notna(edreg):
             rows.append(make_row(sid, edreg, "ED_REGISTRATION"))
@@ -144,14 +182,15 @@ def extract_icustays(df):
         if pd.isna(sid):
             continue
         sid = int(sid)
-        first_cu = str(r.get("first_careunit", "UNK")).strip()
-        last_cu = str(r.get("last_careunit", "UNK")).strip()
+
         intime = r.get("intime")
-        outtime = r.get("outtime")
         if pd.notna(intime):
-            rows.append(make_row(sid, intime, f"ICU_ADMISSION//{first_cu}"))
+            rows.append(make_row(sid, intime, make_code("ICU_ADMISSION", r.get("first_careunit"))))
+
+        outtime = r.get("outtime")
         if pd.notna(outtime):
-            rows.append(make_row(sid, outtime, f"ICU_DISCHARGE//{last_cu}"))
+            rows.append(make_row(sid, outtime, make_code("ICU_DISCHARGE", r.get("last_careunit"))))
+
     return pd.DataFrame(rows)
 
 
@@ -162,14 +201,15 @@ def extract_chartevents(df):
         if pd.isna(sid):
             continue
         sid = int(sid)
+
         t = r.get("charttime")
         if pd.isna(t):
             continue
-        itemid = str(r.get("itemid", "UNK")).strip()
-        uom = str(r.get("valueuom", "")).strip()
-        code = f"CHARTEVENT//{itemid}//{uom}" if uom and uom != "nan" else f"CHARTEVENT//{itemid}"
+
+        code = make_code("CHARTEVENT", r.get("itemid"), r.get("valueuom"))
         num = r.get("valuenum")
         rows.append(make_row(sid, t, code, num if pd.notna(num) else None))
+
     return pd.DataFrame(rows)
 
 
@@ -180,48 +220,61 @@ def extract_labevents(df):
         if pd.isna(sid):
             continue
         sid = int(sid)
+
         t = r.get("charttime")
         if pd.isna(t):
             continue
-        itemid = str(r.get("itemid", "UNK")).strip()
-        uom = str(r.get("valueuom", "")).strip()
-        code = f"LAB//{itemid}//{uom}" if uom and uom != "nan" else f"LAB//{itemid}"
+
+        code = make_code("LAB", r.get("itemid"), r.get("valueuom"))
         num = r.get("valuenum")
         rows.append(make_row(sid, t, code, num if pd.notna(num) else None))
+
     return pd.DataFrame(rows)
 
 
 def extract_diagnoses_icd(df):
+    """
+    Les diagnostics ICD sont traités comme statiques (time = NaT)
+    car la table ne contient pas de timestamp précis,
+    seulement un hadm_id (admission hospitalière).
+    """
     rows = []
     for _, r in df.iterrows():
         sid = r.get("subject_id")
         if pd.isna(sid):
             continue
         sid = int(sid)
-        icd_code = str(r.get("icd_code", "")).strip()
-        icd_ver = str(r.get("icd_version", "")).strip()
-        if not icd_code or icd_code == "nan":
+
+        icd_code = clean(r.get("icd_code", ""))
+        if not icd_code:
             continue
-        code = f"DIAGNOSIS//{icd_ver}//{icd_code}"
-        # static event (no timestamp)
+
+        code = make_code("DIAGNOSIS", r.get("icd_version"), icd_code)
         rows.append(make_row(sid, pd.NaT, code))
+
     return pd.DataFrame(rows)
 
 
 def extract_procedures_icd(df):
+    """
+    chartdate est une date-only résolue à 23:59:59 par pre_meds.py
+    pour éviter la fuite temporelle.
+    """
     rows = []
     for _, r in df.iterrows():
         sid = r.get("subject_id")
         if pd.isna(sid):
             continue
         sid = int(sid)
-        icd_code = str(r.get("icd_code", "")).strip()
-        icd_ver = str(r.get("icd_version", "")).strip()
-        t = r.get("chartdate")
-        if not icd_code or icd_code == "nan":
+
+        icd_code = clean(r.get("icd_code", ""))
+        if not icd_code:
             continue
-        code = f"PROCEDURE_ICD//{icd_ver}//{icd_code}"
+
+        t = r.get("chartdate")
+        code = make_code("PROCEDURE_ICD", r.get("icd_version"), icd_code)
         rows.append(make_row(sid, t if pd.notna(t) else pd.NaT, code))
+
     return pd.DataFrame(rows)
 
 
@@ -232,14 +285,15 @@ def extract_inputevents(df):
         if pd.isna(sid):
             continue
         sid = int(sid)
+
         t = r.get("starttime")
         if pd.isna(t):
             continue
-        itemid = str(r.get("itemid", "UNK")).strip()
-        uom = str(r.get("amountuom", "")).strip()
-        code = f"INPUT_START//{itemid}//{uom}" if uom and uom != "nan" else f"INPUT_START//{itemid}"
+
+        code = make_code("INPUT_START", r.get("itemid"), r.get("amountuom"))
         num = r.get("amount")
         rows.append(make_row(sid, t, code, num if pd.notna(num) else None))
+
     return pd.DataFrame(rows)
 
 
@@ -250,14 +304,15 @@ def extract_outputevents(df):
         if pd.isna(sid):
             continue
         sid = int(sid)
+
         t = r.get("charttime")
         if pd.isna(t):
             continue
-        itemid = str(r.get("itemid", "UNK")).strip()
-        uom = str(r.get("valueuom", "")).strip()
-        code = f"OUTPUT//{itemid}//{uom}" if uom and uom != "nan" else f"OUTPUT//{itemid}"
+
+        code = make_code("OUTPUT", r.get("itemid"), r.get("valueuom"))
         num = r.get("value")
         rows.append(make_row(sid, t, code, num if pd.notna(num) else None))
+
     return pd.DataFrame(rows)
 
 
@@ -268,12 +323,14 @@ def extract_emar(df):
         if pd.isna(sid):
             continue
         sid = int(sid)
+
         t = r.get("charttime")
         if pd.isna(t):
             continue
-        itemid = str(r.get("itemid", "UNK")).strip()
-        code = f"MEDICATION//{itemid}"
+
+        code = make_code("MEDICATION", r.get("itemid"))
         rows.append(make_row(sid, t, code))
+
     return pd.DataFrame(rows)
 
 
@@ -281,13 +338,50 @@ def extract_emar(df):
 # Metadata builders
 # ---------------------------------------------------------------------------
 
-def build_codes_parquet(events_df):
-    codes = events_df["code"].dropna().unique()
-    rows = [{"code": c, "description": None, "parent_codes": None} for c in sorted(codes)]
-    return pd.DataFrame(rows)
+def build_codes_parquet(events_df, intermediate_dir=None):
+    """
+    Construit codes.parquet avec la liste des codes uniques.
+    Si intermediate_dir est fourni, enrichit avec les descriptions
+    issues de syn_d_items et syn_d_labitems.
+    """
+    codes = sorted(events_df["code"].dropna().unique())
+    df = pd.DataFrame({
+        "code": codes,
+        "description": [None] * len(codes),
+        "parent_codes": [None] * len(codes),
+    })
+
+    if intermediate_dir is not None:
+        # construire un dictionnaire itemid -> label depuis les tables de dimension
+        label_map = {}
+        for fname in ["syn_d_items.parquet", "syn_d_labitems.parquet"]:
+            path = intermediate_dir / fname
+            if path.exists():
+                dim = pd.read_parquet(path)
+                for _, r in dim.iterrows():
+                    itemid = clean(r.get("itemid", ""))
+                    label = clean(r.get("label", ""))
+                    if itemid and label:
+                        label_map[itemid] = label
+
+        # pour chaque code MEDS, la 2ème partie après // est l'itemid
+        # ex: "CHARTEVENT//001C_102//회/min" → itemid = "001C_102"
+        def find_description(code):
+            parts = code.split("//")
+            if len(parts) >= 2:
+                return label_map.get(parts[1])
+            return None
+
+        df["description"] = df["code"].apply(find_description)
+
+    return df
 
 
 def build_subject_splits(subject_ids, train_frac=0.8, tuning_frac=0.1):
+    """
+    Assigne chaque patient à un split train/tuning/held_out.
+    random.seed(42) garantit que les splits sont reproductibles.
+    """
     import random
     random.seed(42)
     ids = sorted(subject_ids)
@@ -295,6 +389,7 @@ def build_subject_splits(subject_ids, train_frac=0.8, tuning_frac=0.1):
     n = len(ids)
     n_train = int(n * train_frac)
     n_tuning = int(n * tuning_frac)
+
     splits = {}
     for i, sid in enumerate(ids):
         if i < n_train:
@@ -303,10 +398,11 @@ def build_subject_splits(subject_ids, train_frac=0.8, tuning_frac=0.1):
             splits[sid] = "tuning"
         else:
             splits[sid] = "held_out"
+
     return pd.DataFrame([{"subject_id": sid, "split": s} for sid, s in splits.items()])
 
 
-def build_dataset_json(output_dir, dataset_name="K-MIMIC-MEDS", dataset_version="0.1.0"):
+def build_dataset_json(output_dir, dataset_name, dataset_version):
     meta = {
         "dataset_name": dataset_name,
         "dataset_version": dataset_version,
@@ -319,10 +415,14 @@ def build_dataset_json(output_dir, dataset_name="K-MIMIC-MEDS", dataset_version=
 
 
 # ---------------------------------------------------------------------------
-# Write MEDS parquet (with correct schema)
+# Conversion vers PyArrow avec le schéma MEDS strict
 # ---------------------------------------------------------------------------
 
 def to_meds_table(df):
+    """
+    Convertit un DataFrame pandas en table PyArrow conforme au schéma MEDS.
+    Trie par subject_id puis time (NaT en premier pour les événements statiques).
+    """
     if df.empty:
         df = pd.DataFrame(columns=["subject_id", "time", "code", "numeric_value"])
 
@@ -332,7 +432,7 @@ def to_meds_table(df):
     df["code"] = df["code"].astype(str)
     df["numeric_value"] = pd.to_numeric(df["numeric_value"], errors="coerce").astype("float32")
 
-    # sort by subject_id, then time (NaT first for static events)
+    # NaT en premier = événements statiques en tête du dossier patient
     df = df.sort_values(["subject_id", "time"], na_position="first").reset_index(drop=True)
 
     return pa.Table.from_pandas(df, schema=MEDS_SCHEMA, safe=False)
@@ -344,20 +444,20 @@ def write_parquet(table, path):
 
 
 # ---------------------------------------------------------------------------
-# Main pipeline
+# Pipeline principal
 # ---------------------------------------------------------------------------
 
 EXTRACTORS = {
-    "syn_patients": extract_patients,
-    "syn_admissions": extract_admissions,
-    "syn_icustays": extract_icustays,
-    "syn_chartevents": extract_chartevents,
-    "syn_labevents": extract_labevents,
-    "syn_diagnoses_icd": extract_diagnoses_icd,
+    "syn_patients":       extract_patients,
+    "syn_admissions":     extract_admissions,
+    "syn_icustays":       extract_icustays,
+    "syn_chartevents":    extract_chartevents,
+    "syn_labevents":      extract_labevents,
+    "syn_diagnoses_icd":  extract_diagnoses_icd,
     "syn_procedures_icd": extract_procedures_icd,
-    "syn_inputevents": extract_inputevents,
-    "syn_outputevents": extract_outputevents,
-    "syn_emar": extract_emar,
+    "syn_inputevents":    extract_inputevents,
+    "syn_outputevents":   extract_outputevents,
+    "syn_emar":           extract_emar,
 }
 
 
@@ -384,7 +484,6 @@ def run(intermediate_dir: Path, output_dir: Path, dataset_name: str, dataset_ver
     print("Building subject splits...")
     subject_ids = events_df["subject_id"].dropna().unique().astype(int).tolist()
     splits_df = build_subject_splits(subject_ids)
-    split_map = dict(zip(splits_df["subject_id"], splits_df["split"]))
 
     print("Writing MEDS data files...")
     for split_name in ["train", "tuning", "held_out"]:
@@ -399,8 +498,8 @@ def run(intermediate_dir: Path, output_dir: Path, dataset_name: str, dataset_ver
     meta_dir = output_dir / "metadata"
     meta_dir.mkdir(parents=True, exist_ok=True)
 
-    # codes.parquet
-    codes_df = build_codes_parquet(events_df)
+    # codes.parquet enrichi avec les descriptions
+    codes_df = build_codes_parquet(events_df, intermediate_dir)
     codes_table = pa.Table.from_pandas(codes_df, schema=CODES_SCHEMA, safe=False)
     write_parquet(codes_table, meta_dir / "codes.parquet")
     print(f"  codes.parquet — {len(codes_df)} unique codes")
@@ -430,9 +529,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-# validation rapide
-import pandas as pd
-df = pd.read_parquet("data/output/data/train/0.parquet")
-print(df.dtypes)
-print(df.head(10))
