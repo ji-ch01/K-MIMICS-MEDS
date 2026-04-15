@@ -56,6 +56,38 @@ SPLITS_SCHEMA = pa.schema([
 # Values considered as empty
 _EMPTY = {"", "nan", "None", "UNK", "NaN", "none", "null", "NULL"}
 
+# Mapping of Korean/non-standard units to standard equivalents
+UNIT_MAP = {
+    "회/min": "/min",
+    "회/분": "/min",
+    "℃": "Cel",
+    "㎍/dL": "ug/dL",
+    "㎍/mL": "ug/mL",
+    "㎍/L": "ug/L",
+    "㎎/dL": "mg/dL",
+    "㎎/L": "mg/L",
+    "㎝": "cm",
+    "㎜": "mm",
+    "㎏": "kg",
+    "㎖": "mL",
+    "㎕": "uL",
+    "μg/dL": "ug/dL",
+    "μg/mL": "ug/mL",
+    "μg/L": "ug/L",
+    "μmol/L": "umol/L",
+    "μU/mL": "uU/mL",
+    "×10³/μL": "x10e3/uL",
+    "x10³/μL": "x10e3/uL",
+    "×10⁶/μL": "x10e6/uL",
+    "x10⁶/μL": "x10e6/uL",
+    "L%/R%": "L%/R%",
+}
+
+def normalize_unit(unit):
+    """Normalize a unit string to a standard equivalent if known, otherwise return as-is."""
+    if unit is None or not isinstance(unit, str) or unit.strip() in _EMPTY:
+        return None
+    return UNIT_MAP.get(unit.strip(), unit.strip())
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -282,17 +314,17 @@ def extract_chartevents(df):
     Vectorized: builds CHARTEVENT//itemid//uom codes in a single pass.
     """
     df = df[df["charttime"].notna()].copy()
-
+    
     itemid = df["itemid"].astype(str).str.strip()
-    uom = df["valueuom"].astype(str).str.strip()
+    uom = df["valueuom"].map(normalize_unit)
 
     # Build code: CHARTEVENT//itemid//uom (if uom not empty)
-    has_uom = ~uom.isin(_EMPTY)
+    has_uom = ~uom.isin(_EMPTY) & uom.notna()
     df["code"] = "CHARTEVENT//" + itemid
     df.loc[has_uom, "code"] = "CHARTEVENT//" + itemid[has_uom] + "//" + uom[has_uom]
-
+    
     df["numeric_value"] = pd.to_numeric(df["valuenum"], errors="coerce")
-
+    
     return df[["subject_id", "charttime", "code", "numeric_value"]].rename(
         columns={"charttime": "time"})
 
@@ -305,7 +337,7 @@ def extract_labevents(df):
     df = df[df["charttime"].notna()].copy()
 
     itemid = df["itemid"].astype(str).str.strip()
-    uom = df["valueuom"].astype(str).str.strip()
+    uom = df["valueuom"].map(normalize_unit)
 
     has_uom = ~uom.isin(_EMPTY)
     df["code"] = "LAB//" + itemid
@@ -380,9 +412,9 @@ def extract_inputevents(df):
     df = df[df["starttime"].notna()].copy()
 
     itemid = df["itemid"].astype(str).str.strip()
-    uom = df["amountuom"].astype(str).str.strip()
+    uom = df["amountuom"].map(normalize_unit)
 
-    has_uom = ~uom.isin(_EMPTY)
+    has_uom = ~uom.isin(_EMPTY) & uom.notna()
     df["code"] = "INPUT_START//" + itemid
     df.loc[has_uom, "code"] = "INPUT_START//" + itemid[has_uom] + "//" + uom[has_uom]
 
@@ -400,9 +432,9 @@ def extract_outputevents(df):
     df = df[df["charttime"].notna()].copy()
 
     itemid = df["itemid"].astype(str).str.strip()
-    uom = df["valueuom"].astype(str).str.strip()
+    uom = df["valueuom"].map(normalize_unit)
 
-    has_uom = ~uom.isin(_EMPTY)
+    has_uom = uom.notna() & ~uom.isin(_EMPTY)
     df["code"] = "OUTPUT//" + itemid
     df.loc[has_uom, "code"] = "OUTPUT//" + itemid[has_uom] + "//" + uom[has_uom]
 
