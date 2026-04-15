@@ -14,20 +14,20 @@ This repository provides a **standalone ETL pipeline** (no MEDS-Extract CLI requ
 
 1. Cleans and transforms raw K-MIMIC `.xlsx` tables into intermediate Parquet files (`pre_meds.py`)
 2. Converts those Parquet files into a fully MEDS-compliant dataset (`meds_convert.py`)
-3. Validates the output with a Jupyter notebook (`validation.ipynb`)
+3. Validates the output with a Jupyter notebook (`validation.ipynb`) and a CLI script (`validate.py`)
 
 The ETL code is packaged as a Python package (`kmimic_meds`) intended for publication on PyPI.
 
-> **Note:** MEDS-Extract CLI was evaluated but not used due to Windows compatibility issues with Hydra configuration. The standalone approach produces identical output and works cross-platform.
+> **Note:** MEDS-Extract CLI was evaluated but not used due to Windows/Hydra compatibility issues. The standalone approach produces identical output and works cross-platform.
 
 ---
 
 ## Data Sources
 
-| Source                                                                              | Description                                           |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| [Synthetic K-MIMIC (SYN-ICU)](https://khdp.net/database/data-search-detail/SYN-ICU) | Synthetic Korean ICU dataset published by KHDP        |
-| [MIMIC-IV-MEDS](https://physionet.org/content/mimic-iv-demo-meds/0.0.1/)            | Reference MEDS conversion of MIMIC-IV (used as model) |
+| Source | Description |
+|--------|-------------|
+| [Synthetic K-MIMIC (SYN-ICU)](https://khdp.net/database/data-search-detail/SYN-ICU) | Synthetic Korean ICU dataset published by KHDP |
+| [MIMIC-IV-MEDS](https://physionet.org/content/mimic-iv-demo-meds/0.0.1/) | Reference MEDS conversion of MIMIC-IV (used as model) |
 
 > Raw K-MIMIC data is **not included** in this repository. Download it from the KHDP portal and place the `.xlsx` files under `data/raw/`.
 
@@ -51,8 +51,9 @@ K-MIMIC-MEDS/
 │       └── utils/
 │           └── io.py
 ├── tests/
-│   └── test_pre_meds.py
-├── validation.ipynb            # Validation notebook (9/9 checks)
+│   └── test_meds_convert.py    # 21 unit tests
+├── validation.ipynb            # Validation notebook (15/15 checks)
+├── validate.py                 # CLI validation script (26/26 checks)
 ├── pyproject.toml
 └── README.md
 ```
@@ -62,7 +63,7 @@ K-MIMIC-MEDS/
 ## Installation
 
 ```bash
-git clone https://github.com/ji-ch01/K-MIMIC-MEDS.git
+git clone https://github.com/<your-username>/K-MIMIC-MEDS.git
 cd K-MIMIC-MEDS
 pip install -e .
 pip install openpyxl
@@ -77,7 +78,6 @@ pip install openpyxl
 Download the Synthetic K-MIMIC dataset from [KHDP](https://khdp.net/database/data-search-detail/SYN-ICU) and place all `.xlsx` files under `data/raw/`.
 
 Expected files:
-
 ```
 data/raw/
 ├── syn_admissions.xlsx
@@ -108,7 +108,6 @@ python src/kmimic_meds/etl/pre_meds.py \
 ```
 
 What it does:
-
 - Reads all 15 `.xlsx` source tables
 - Converts UUID string IDs to stable `int64` via SHA-256 hashing
 - Parses and normalizes timestamps (including mixed date/datetime formats)
@@ -128,23 +127,39 @@ python src/kmimic_meds/etl/meds_convert.py \
 ```
 
 What it does:
-
-- Extracts MEDS events from each source table
-- Builds hierarchical codes using `//` as separator (e.g. `CHARTEVENT//001C_102//mmHg`)
-- Assigns patients to `train` (80%), `tuning` (10%), `held_out` (10%) splits
+- Extracts MEDS events from each source table (vectorized, ~7s total)
+- Normalizes Korean and non-standard units to international equivalents
+- Links diagnoses to admission timestamps via `hadm_id` join
+- Assigns patients to `train` (80%), `tuning` (10%), `held_out` (10%) splits with fixed seed
 - Writes Parquet files with the strict MEDS PyArrow schema
-- Enriches `codes.parquet` with descriptions from `syn_d_items` and `syn_d_labitems`
+- Enriches `codes.parquet` with descriptions and EDI parent codes
 
 ### Step 4 — Validate
 
-Open `validation.ipynb` in Jupyter and run all cells.
+**Option A — Jupyter notebook** (visual, for presentations):
 
 ```bash
 pip install notebook
 jupyter notebook validation.ipynb
 ```
 
-Expected result: **9/9 checks passed**.
+Expected result: **15/15 checks passed**.
+
+**Option B — CLI script** (fast, for CI):
+
+```bash
+python validate.py --output_dir data/output
+```
+
+Expected result: **26/26 checks passed**.
+
+**Option C — Unit tests** (for code correctness):
+
+```bash
+pytest tests/test_meds_convert.py -v
+```
+
+Expected result: **21/21 tests passed**.
 
 ---
 
@@ -157,52 +172,57 @@ data/output/
 │   ├── tuning/0.parquet      ← 10% of patients
 │   └── held_out/0.parquet    ← 10% of patients
 └── metadata/
-    ├── codes.parquet         ← unique codes with descriptions
+    ├── codes.parquet         ← unique codes with descriptions and EDI parent codes
     ├── dataset.json          ← dataset metadata
     └── subject_splits.parquet
 ```
 
 Each row in the data files follows the MEDS schema:
 
-| Column          | Type            | Description                                                  |
-| --------------- | --------------- | ------------------------------------------------------------ |
-| `subject_id`    | `int64`         | Unique patient identifier                                    |
-| `time`          | `timestamp[us]` | Timestamp of the event (`null` for static measurements)      |
-| `code`          | `string`        | Event code (e.g. `CHARTEVENT//001C_102//mmHg`, `MEDS_BIRTH`) |
-| `numeric_value` | `float32`       | Numeric value if applicable, otherwise `null`                |
+| Column | Type | Description |
+|--------|------|-------------|
+| `subject_id` | `int64` | Unique patient identifier |
+| `time` | `timestamp[us]` | Timestamp of the event (`null` for static events) |
+| `code` | `string` | Event code (e.g. `CHARTEVENT//001C_102//mmHg`, `MEDS_BIRTH`) |
+| `numeric_value` | `float32` | Numeric value if applicable, otherwise `null` |
 
 ### Event types and codes
 
-| Prefix               | Source table                     | Example code                               |
-| -------------------- | -------------------------------- | ------------------------------------------ |
-| `MEDS_BIRTH`         | `syn_patients`                   | `MEDS_BIRTH`                               |
-| `MEDS_DEATH`         | `syn_patients`, `syn_admissions` | `MEDS_DEATH`                               |
-| `GENDER`             | `syn_patients` (static)          | `GENDER//M`                                |
-| `HOSPITAL_ADMISSION` | `syn_admissions`                 | `HOSPITAL_ADMISSION//Emergency department` |
-| `HOSPITAL_DISCHARGE` | `syn_admissions`                 | `HOSPITAL_DISCHARGE//Home`                 |
-| `ICU_ADMISSION`      | `syn_icustays`                   | `ICU_ADMISSION//SICU`                      |
-| `ICU_DISCHARGE`      | `syn_icustays`                   | `ICU_DISCHARGE//RICU`                      |
-| `CHARTEVENT`         | `syn_chartevents`                | `CHARTEVENT//001C_1021_25105//회/min`      |
-| `LAB`                | `syn_labevents`                  | `LAB//001L3005//mg/dL`                     |
-| `DIAGNOSIS`          | `syn_diagnoses_icd` (static)     | `DIAGNOSIS//KCD8//I251`                    |
-| `PROCEDURE_ICD`      | `syn_procedures_icd`             | `PROCEDURE_ICD//ICD9CM//54.11`             |
-| `INPUT_START`        | `syn_inputevents`                | `INPUT_START//001I_1315//cc`               |
-| `OUTPUT`             | `syn_outputevents`               | `OUTPUT//001O_148//cc`                     |
-| `MEDICATION`         | `syn_emar`                       | `MEDICATION//12005122`                     |
+| Prefix | Source table | Example code |
+|--------|-------------|--------------|
+| `MEDS_BIRTH` | `syn_patients` | `MEDS_BIRTH` |
+| `MEDS_DEATH` | `syn_patients`, `syn_admissions` | `MEDS_DEATH` |
+| `GENDER` | `syn_patients` (static) | `GENDER//M` |
+| `HOSPITAL_ADMISSION` | `syn_admissions` | `HOSPITAL_ADMISSION//Emergency department` |
+| `HOSPITAL_DISCHARGE` | `syn_admissions` | `HOSPITAL_DISCHARGE//Home` |
+| `ICU_ADMISSION` | `syn_icustays` | `ICU_ADMISSION//RICU` |
+| `ICU_DISCHARGE` | `syn_icustays` | `ICU_DISCHARGE//RICU` |
+| `CHARTEVENT` | `syn_chartevents` | `CHARTEVENT//001C_1021_25105///min` |
+| `LAB` | `syn_labevents` | `LAB//001L3005//mg/dL` |
+| `DIAGNOSIS` | `syn_diagnoses_icd` | `DIAGNOSIS//KCD8//I251` |
+| `PROCEDURE_ICD` | `syn_procedures_icd` | `PROCEDURE_ICD//KCD8//54.11` |
+| `PROCEDURE_START` | `syn_procedureevents` | `PROCEDURE_START//001P_OPFG130303` |
+| `PROCEDURE_END` | `syn_procedureevents` | `PROCEDURE_END//001P_OPFG130303` |
+| `INPUT_START` | `syn_inputevents` | `INPUT_START//001I_1315//cc` |
+| `OUTPUT` | `syn_outputevents` | `OUTPUT//001O_148//cc` |
+| `MEDICATION` | `syn_emar` | `MEDICATION//12005122` |
 
 ### Dataset statistics (SYN-ICU)
 
-| Metric                      | Value       |
-| --------------------------- | ----------- |
-| Total events                | 639,454     |
-| Total patients              | 1,328       |
-| Static events (time = null) | 4,419       |
-| Dynamic events              | 635,035     |
-| Events with numeric value   | 605,941     |
-| Unique codes                | 182         |
-| Train patients              | 1,062 (80%) |
-| Tuning patients             | 132 (10%)   |
-| Held-out patients           | 134 (10%)   |
+| Metric | Value |
+|--------|-------|
+| Total events | 1,381,668 |
+| Total patients | 1,328 |
+| Static events (time = null) | 1,328 |
+| Dynamic events | 1,380,340 |
+| Events with numeric value | 605,941 |
+| Unique codes | 201 |
+| Codes with description | 110 |
+| Codes with EDI parent codes | 32 |
+| Train patients | 1,062 (80%) |
+| Tuning patients | 132 (10%) |
+| Held-out patients | 134 (10%) |
+| Pipeline runtime | ~7s |
 
 ---
 
@@ -212,11 +232,17 @@ Each row in the data files follows the MEDS schema:
 
 **Standalone pipeline:** MEDS-Extract CLI was evaluated but bypassed due to Windows/Hydra compatibility issues. The standalone `meds_convert.py` produces identical output with no external CLI dependency.
 
+**Vectorized extractors:** All event extraction functions use pandas vectorized operations instead of `iterrows()`, reducing runtime from ~40s to ~7s (10-50x faster).
+
+**Diagnosis timestamps:** Diagnoses ICD are joined with the admissions table on `hadm_id` to recover their admission timestamp, making them dynamic events rather than static ones.
+
 **Date-only timestamps:** `procedures_icd.chartdate` is a date without time. We add `23:59:59` to avoid temporal leakage in prediction tasks.
 
-**Static events:** Diagnoses ICD and gender are treated as static (`time = null`) because no precise timestamp is available in the source data. They appear first in each patient's record as per the MEDS specification.
+**Korean unit normalization:** K-MIMIC uses Korean and non-standard units (`회/min`, `℃`, `×10³/㎕`, etc.). All units are mapped to international equivalents via a `UNIT_MAP` dictionary.
 
-**Korean medical codes:** K-MIMIC uses the Korean Classification of Disease (KCD8) standard for diagnoses. These codes are preserved as-is in the MEDS output.
+**Korean medical codes:** K-MIMIC uses the Korean Classification of Disease (KCD8) standard for diagnoses. These codes are preserved as-is and linked to EDI parent codes for lab items.
+
+**Microsecond timestamps:** K-MIMIC uses de-identified future years (2795+) that exceed the pandas nanosecond limit. All timestamps use `datetime64[us]` precision instead.
 
 ---
 
@@ -233,4 +259,6 @@ Each row in the data files follows the MEDS schema:
 
 ## License
 
-To be determined based on K-MIMIC data licensing terms.
+The Synthetic K-MIMIC (SYN-ICU) dataset is provided by the **NSTRI Data Innovation Center** via the KHDP (Korean Health Data Platform) portal. Please refer to the [KHDP data usage terms](https://khdp.net/database/data-search-detail/SYN-ICU) before using this dataset.
+
+The ETL pipeline code in this repository is independently developed and not affiliated with KHDP or NSTRI.
