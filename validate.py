@@ -58,7 +58,7 @@ def validate(output_dir: Path) -> bool:
     check("no //nan in codes", len(nan_codes) == 0, f"{len(nan_codes)} found")
     unknown_codes = train[train["code"] == "UNKNOWN"]
     check("no UNKNOWN codes", len(unknown_codes) == 0, f"{len(unknown_codes)} found")
-    korean = train[train["code"].str.contains("회|℃|㎍|㎎|μ|×", na=False, regex=True)]
+    korean = train[train["code"].str.contains("회|℃|㎍|㎎|×|㎕|μℓ", na=False, regex=True)]
     check("no Korean units in codes", len(korean) == 0, f"{len(korean)} found")
     # Debug — show what was found
     if len(korean) > 0:
