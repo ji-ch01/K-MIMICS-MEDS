@@ -424,6 +424,30 @@ def extract_emar(df):
     return df[["subject_id", "charttime", "code", "numeric_value"]].rename(
         columns={"charttime": "time"})
 
+def extract_procedureevents(df):
+    """
+    Extracts from syn_procedureevents.
+    Each procedure generates two events:
+    - PROCEDURE_START//itemid at starttime
+    - PROCEDURE_END//itemid at endtime (if present)
+    """
+    results = []
+
+    # procedure start
+    start = df[df["starttime"].notna()].copy()
+    start["code"] = "PROCEDURE_START//" + start["itemid"].astype(str).str.strip()
+    start["numeric_value"] = None
+    results.append(start[["subject_id", "starttime", "code", "numeric_value"]].rename(
+        columns={"starttime": "time"}))
+
+    # procedure end
+    end = df[df["endtime"].notna()].copy()
+    end["code"] = "PROCEDURE_END//" + end["itemid"].astype(str).str.strip()
+    end["numeric_value"] = None
+    results.append(end[["subject_id", "endtime", "code", "numeric_value"]].rename(
+        columns={"endtime": "time"}))
+
+    return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
 
 # ---------------------------------------------------------------------------
 # Metadata builders
@@ -577,6 +601,7 @@ def run(intermediate_dir: Path, output_dir: Path, dataset_name: str, dataset_ver
         "syn_labevents":      (extract_labevents, {}),
         "syn_diagnoses_icd":  (extract_diagnoses_icd, {"admissions_df": admissions_df}),
         "syn_procedures_icd": (extract_procedures_icd, {}),
+        "syn_procedureevents": (extract_procedureevents, {}),
         "syn_inputevents":    (extract_inputevents, {}),
         "syn_outputevents":   (extract_outputevents, {}),
         "syn_emar":           (extract_emar, {}),
