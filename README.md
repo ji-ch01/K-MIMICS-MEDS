@@ -167,7 +167,7 @@ Expected result: **46/46 checks passed**.
 pytest tests/test_meds_convert.py -v
 ```
 
-Expected result: **21/21 tests passed**.
+Expected result: **71/71 tests passed**.
 
 ---
 
@@ -205,7 +205,7 @@ Each row in the data files follows the MEDS schema:
 | `HOSPITAL_DISCHARGE` | `syn_admissions` | `HOSPITAL_DISCHARGE//Home` |
 | `ICU_ADMISSION` | `syn_icustays` | `ICU_ADMISSION//RICU` |
 | `ICU_DISCHARGE` | `syn_icustays` | `ICU_DISCHARGE//RICU` |
-| `CHARTEVENT` | `syn_chartevents` | `CHARTEVENT//001C_1021_25105//per_min` |
+| `CHARTEVENT` | `syn_chartevents` | `CHARTEVENT//001C_1021_25105///min` |
 | `LAB` | `syn_labevents` | `LAB//001L3005//mg/dL` |
 | `DIAGNOSIS` | `syn_diagnoses_icd` | `DIAGNOSIS//KCD8//I251` |
 | `PROCEDURE_ICD` | `syn_procedures_icd` | `PROCEDURE_ICD//KCD8//54.11` |
@@ -224,8 +224,8 @@ Each row in the data files follows the MEDS schema:
 | Static events (time = null) | 1,328 |
 | Dynamic events | 1,380,252 |
 | Events with numeric value | 605,941 |
-| Unique codes | 201 |
-| Codes with description | 110 |
+| Unique codes | 204 |
+| Codes with description | 113 |
 | Codes with EDI parent codes | 32 |
 | Train patients | 1,062 (80%) |
 | Tuning patients | 132 (10%) |
@@ -258,7 +258,9 @@ Each row in the data files follows the MEDS schema:
 
 **Synthetic dataset:** SYN-ICU is a synthetically generated dataset. Its distributions do not reflect real Korean ICU patient populations. Models trained on this dataset should not be expected to generalize directly to real clinical settings without further validation on real data.
 
-**`MEDS_DEATH` temporal tolerance:** The `dod` field in K-MIMIC is stored as a date only (midnight, `00:00:00`). Clinical measurements recorded on the same day as death but with precise timestamps can appear after `MEDS_DEATH`. The temporal consistency check applies a 48-hour tolerance window and excludes `PROCEDURE_START`/`PROCEDURE_END` events, which are a known artifact of the synthetic data generation process.
+**`MEDS_DEATH` temporal precision:** The `dod` field in K-MIMIC is stored as a date only (midnight, `00:00:00`). When `admissions.deathtime` is available (88 out of 88 deceased patients), the pipeline uses that field instead, providing hour-level precision. For patients where `deathtime` is absent, `dod` midnight is used as a fallback. The temporal consistency check applies a 48-hour tolerance window and excludes `PROCEDURE_START`/`PROCEDURE_END` events, which are a known artifact of the synthetic data generation process.
+
+**Missing `MEDS_BIRTH` events:** 79 out of 1,328 patients have no `MEDS_BIRTH` event because `anchor_age` is `NaN` in the source `syn_patients` table — making it impossible to compute `year_of_birth`. These patients are fully retained in the dataset with all their other events (79,165 total).
 
 **`chartdate` precision:** Procedure ICD timestamps are resolved to `23:59:59` on the recorded date. This is a convention to avoid temporal leakage — the exact time of the procedure within the day is not available in the source data.
 
