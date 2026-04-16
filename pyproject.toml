@@ -8,7 +8,30 @@ version = "0.1.0"
 description = "ETL pipeline to convert Synthetic K-MIMIC ICU data to the MEDS format"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "TBD" }
+
+
+authors = [
+    { name = "Jiwoo Choi" },
+    { name = "Professor Hyeonhoon Lee", email = "hhoon@snu.ac.kr"},
+    { name = "Professor Hyung-Chul Lee", email = "vital@snu.ac.kr"},
+    { name = "Professor Jaegyun Jung", email = "jaegyun.jung@snu.ac.kr"}
+]
+
+keywords = ["MEDS", "K-MIMIC", "ICU", "healthcare", "ETL", "clinical", "machine learning"]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Healthcare Industry",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
 
 dependencies = [
     "pandas>=2.0",
@@ -23,8 +46,14 @@ dev = [
     "ruff>=0.4",
 ]
 
+[project.urls]
+Homepage = "https://github.com/<your-username>/K-MIMIC-MEDS"
+Repository = "https://github.com/<your-username>/K-MIMIC-MEDS"
+Issues = "https://github.com/<your-username>/K-MIMIC-MEDS/issues"
+
 [project.scripts]
 kmimic-pre-meds = "kmimic_meds.etl.pre_meds:main"
+kmimic-convert = "kmimic_meds.etl.meds_convert:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -32,3 +61,6 @@ where = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

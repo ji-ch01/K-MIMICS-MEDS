@@ -2,6 +2,10 @@
 
 ETL pipeline to convert the **Synthetic K-MIMIC (SYN-ICU)** Korean ICU dataset into the **MEDS** (Medical Event Data Standard) format.
 
+This project was developed as part of an internship at **[VitalLab](https://sites.google.com/vitaldb.net/vitallab-snucmsnuh/home)** — Department of Anesthesiology and Pain Medicine, Seoul National University College of Medicine / Seoul National University Hospital (SNUCM/SNUH) — under the supervision of Professor Hyung-Chul Lee and Professor Hyeonhoon Lee.
+
+The intern is a student at **Efrei Paris** (M2 Bioinformatics, Data Engineering & AI).
+
 This project is part of a research initiative to extend the MEDS ecosystem to non-English clinical datasets, starting with the Korean ICU synthetic dataset published by KHDP.
 
 ---
@@ -37,6 +41,9 @@ The ETL code is packaged as a Python package (`kmimic_meds`) intended for public
 
 ```
 K-MIMIC-MEDS/
+├── .github/
+│   └── workflows/
+│       └── tests.yml           # GitHub Actions — runs pytest on push
 ├── configs/
 │   └── messy.yaml              # MEDS-Extract event mapping (reference, not used in pipeline)
 ├── data/
@@ -52,8 +59,9 @@ K-MIMIC-MEDS/
 │           └── io.py
 ├── tests/
 │   └── test_meds_convert.py    # 21 unit tests
-├── validation.ipynb            # Validation notebook (15/15 checks)
-├── validate.py                 # CLI validation script (26/26 checks)
+├── validation.ipynb            # Validation notebook (24/24 checks)
+├── validate.py                 # CLI validation script (46/46 checks)
+├── LICENSE                     # MIT License
 ├── pyproject.toml
 └── README.md
 ```
@@ -109,7 +117,7 @@ python src/kmimic_meds/etl/pre_meds.py \
 
 What it does:
 - Reads all 15 `.xlsx` source tables
-- Converts UUID string IDs to stable `int64` via SHA-256 hashing
+- Converts UUID string IDs to stable `int64` via SHA-256 hashing (collision-free verified)
 - Parses and normalizes timestamps (including mixed date/datetime formats)
 - Computes `year_of_birth = anchor_year - anchor_age`
 - Resolves date-only columns (adds `23:59:59` to `chartdate` in `procedures_icd`)
@@ -143,7 +151,7 @@ pip install notebook
 jupyter notebook validation.ipynb
 ```
 
-Expected result: **15/15 checks passed**.
+Expected result: **24/24 checks passed**.
 
 **Option B — CLI script** (fast, for CI):
 
@@ -151,7 +159,7 @@ Expected result: **15/15 checks passed**.
 python validate.py --output_dir data/output
 ```
 
-Expected result: **26/26 checks passed**.
+Expected result: **46/46 checks passed**.
 
 **Option C — Unit tests** (for code correctness):
 
@@ -191,13 +199,13 @@ Each row in the data files follows the MEDS schema:
 | Prefix | Source table | Example code |
 |--------|-------------|--------------|
 | `MEDS_BIRTH` | `syn_patients` | `MEDS_BIRTH` |
-| `MEDS_DEATH` | `syn_patients`, `syn_admissions` | `MEDS_DEATH` |
+| `MEDS_DEATH` | `syn_patients` | `MEDS_DEATH` |
 | `GENDER` | `syn_patients` (static) | `GENDER//M` |
 | `HOSPITAL_ADMISSION` | `syn_admissions` | `HOSPITAL_ADMISSION//Emergency department` |
 | `HOSPITAL_DISCHARGE` | `syn_admissions` | `HOSPITAL_DISCHARGE//Home` |
 | `ICU_ADMISSION` | `syn_icustays` | `ICU_ADMISSION//RICU` |
 | `ICU_DISCHARGE` | `syn_icustays` | `ICU_DISCHARGE//RICU` |
-| `CHARTEVENT` | `syn_chartevents` | `CHARTEVENT//001C_1021_25105///min` |
+| `CHARTEVENT` | `syn_chartevents` | `CHARTEVENT//001C_1021_25105//per_min` |
 | `LAB` | `syn_labevents` | `LAB//001L3005//mg/dL` |
 | `DIAGNOSIS` | `syn_diagnoses_icd` | `DIAGNOSIS//KCD8//I251` |
 | `PROCEDURE_ICD` | `syn_procedures_icd` | `PROCEDURE_ICD//KCD8//54.11` |
@@ -211,10 +219,10 @@ Each row in the data files follows the MEDS schema:
 
 | Metric | Value |
 |--------|-------|
-| Total events | 1,381,668 |
+| Total events | 1,381,580 |
 | Total patients | 1,328 |
 | Static events (time = null) | 1,328 |
-| Dynamic events | 1,380,340 |
+| Dynamic events | 1,380,252 |
 | Events with numeric value | 605,941 |
 | Unique codes | 201 |
 | Codes with description | 110 |
@@ -228,21 +236,31 @@ Each row in the data files follows the MEDS schema:
 
 ## Key Design Decisions
 
-**UUID → int64 conversion:** K-MIMIC uses UUID strings for all identifiers. MEDS requires `int64`. We use SHA-256 hashing to produce stable, positive int64 values: the same UUID always maps to the same integer.
+**UUID → int64 conversion:** K-MIMIC uses UUID strings for all identifiers. MEDS requires `int64`. We use SHA-256 hashing to produce stable, positive int64 values. Uniqueness is verified after conversion with an assertion — for 1,328 patients the birthday bound is ~2³¹, making collisions negligible. The stateless approach requires no central mapping table and works identically across all 15 source tables.
 
 **Standalone pipeline:** MEDS-Extract CLI was evaluated but bypassed due to Windows/Hydra compatibility issues. The standalone `meds_convert.py` produces identical output with no external CLI dependency.
 
 **Vectorized extractors:** All event extraction functions use pandas vectorized operations instead of `iterrows()`, reducing runtime from ~40s to ~7s (10-50x faster).
 
-**Diagnosis timestamps:** Diagnoses ICD are joined with the admissions table on `hadm_id` to recover their admission timestamp, making them dynamic events rather than static ones.
+**Diagnosis timestamps:** Diagnoses ICD are joined with the admissions table on `hadm_id` to recover their admission timestamp, making them dynamic events rather than static ones. All 3,091 diagnoses have real timestamps.
 
-**Date-only timestamps:** `procedures_icd.chartdate` is a date without time. We add `23:59:59` to avoid temporal leakage in prediction tasks.
+**Date-only timestamps:** `procedures_icd.chartdate` is a date without time. We add `23:59:59` to avoid temporal leakage in prediction tasks — placing the procedure at the end of the recorded day.
 
-**Korean unit normalization:** K-MIMIC uses Korean and non-standard units (`회/min`, `℃`, `×10³/㎕`, etc.). All units are mapped to international equivalents via a `UNIT_MAP` dictionary.
+**Korean unit normalization:** K-MIMIC uses Korean and non-standard units (`회/min`, `℃`, `×10³/㎕`, etc.). All units are mapped to international equivalents via a `UNIT_MAP` dictionary. Result: 0 non-standard units remaining.
 
 **Korean medical codes:** K-MIMIC uses the Korean Classification of Disease (KCD8) standard for diagnoses. These codes are preserved as-is and linked to EDI parent codes for lab items.
 
-**Microsecond timestamps:** K-MIMIC uses de-identified future years (2795+) that exceed the pandas nanosecond limit. All timestamps use `datetime64[us]` precision instead.
+**Microsecond timestamps:** K-MIMIC uses de-identified future years (2795+) that exceed the pandas nanosecond limit (year 2262). All timestamps use `datetime64[us]` precision instead, extending the range to year 294,000.
+
+---
+
+## Known Limitations
+
+**Synthetic dataset:** SYN-ICU is a synthetically generated dataset. Its distributions do not reflect real Korean ICU patient populations. Models trained on this dataset should not be expected to generalize directly to real clinical settings without further validation on real data.
+
+**`MEDS_DEATH` temporal tolerance:** The `dod` field in K-MIMIC is stored as a date only (midnight, `00:00:00`). Clinical measurements recorded on the same day as death but with precise timestamps can appear after `MEDS_DEATH`. The temporal consistency check applies a 48-hour tolerance window and excludes `PROCEDURE_START`/`PROCEDURE_END` events, which are a known artifact of the synthetic data generation process.
+
+**`chartdate` precision:** Procedure ICD timestamps are resolved to `23:59:59` on the recorded date. This is a convention to avoid temporal leakage — the exact time of the procedure within the day is not available in the source data.
 
 ---
 
@@ -259,6 +277,4 @@ Each row in the data files follows the MEDS schema:
 
 ## License
 
-The Synthetic K-MIMIC (SYN-ICU) dataset is provided by the **NSTRI Data Innovation Center** via the KHDP (Korean Health Data Platform) portal. Please refer to the [KHDP data usage terms](https://khdp.net/database/data-search-detail/SYN-ICU) before using this dataset.
-
-The ETL pipeline code in this repository is independently developed and not affiliated with KHDP or NSTRI.
+The Synthetic K-MIMIC (SYN-ICU) dataset is provided by the **NSTRI Data Innovation Center** via the KHDP (Korean Health Data Platform) portal. Please refer to the [KHDP data usage terms](https://khdp.net/database/data-search-detail/SYN-ICU) before using this dataset. The pipeline code is independently developed and not affiliated with KHDP or NSTRI.
