@@ -269,14 +269,6 @@ def extract_admissions(df):
     results.append(dis[["subject_id", "dischtime", "code", "numeric_value"]].rename(
         columns={"dischtime": "time"}))
 
-    # --- death ---
-    death = df[df["deathtime"].notna()].copy()
-    if not death.empty:
-        death["code"] = "MEDS_DEATH"
-        death["numeric_value"] = None
-        results.append(death[["subject_id", "deathtime", "code", "numeric_value"]].rename(
-            columns={"deathtime": "time"}))
-
     # --- emergency department ---
     for col, code in [("edregtime", "ED_REGISTRATION"), ("edouttime", "ED_OUT")]:
         if col in df.columns:
