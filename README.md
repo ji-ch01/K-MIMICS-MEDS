@@ -71,7 +71,7 @@ K-MIMIC-MEDS/
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/K-MIMIC-MEDS.git
+git clone https://github.com/ji-ch01/K-MIMIC-MEDS.git
 cd K-MIMIC-MEDS
 pip install -e .
 pip install openpyxl
