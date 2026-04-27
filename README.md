@@ -1,6 +1,8 @@
 # K-MIMIC-MEDS
 
-ETL pipeline to convert the **Synthetic K-MIMIC (SYN-ICU)** Korean ICU dataset into the **MEDS** (Medical Event Data Standard) format.
+ETL pipeline to convert the **Synthetic K-MIMIC (SYN-ICU)** Korean ICU dataset into the **MEDS** (Medical Event Data Standard) format, with a transportable in-hospital mortality benchmark.
+
+> **Paper:** *Synthetic K-MIMIC in MEDS: Validation and a Transportable Mortality Benchmark* — submitted to the SD4H Workshop @ ICML 2026.
 
 This project was developed as part of an internship at **[VitalLab](https://sites.google.com/vitaldb.net/vitallab-snucmsnuh/home)** — Department of Anesthesiology and Pain Medicine, Seoul National University College of Medicine / Seoul National University Hospital (SNUCM/SNUH) — under the supervision of Professor Hyung-Chul Lee and Professor Hyeonhoon Lee.
 
@@ -44,26 +46,46 @@ The ETL code is packaged as a Python package (`kmimic_meds`) intended for public
 K-MIMIC-MEDS/
 ├── .github/
 │   └── workflows/
-│       └── tests.yml           # GitHub Actions — runs pytest on push
-├── configs/
-│   └── messy.yaml              # MEDS-Extract event mapping (reference, not used in pipeline)
+│       └── tests.yml                     # GitHub Actions — runs pytest on push
 ├── data/
-│   ├── raw/                    # Raw K-MIMIC .xlsx files (not versioned)
-│   ├── intermediate/           # Pre-MEDS Parquet files (not versioned)
-│   ├── output/                 # Final MEDS-compliant dataset (not versioned)
-│   └── labels/                 # Extracted task labels in MEDS-DEV format (not versioned)
+│   ├── raw/                              # Raw K-MIMIC .xlsx files (not versioned)
+│   ├── intermediate/                     # Pre-MEDS Parquet files (not versioned)
+│   ├── output/                           # Final MEDS-compliant dataset (not versioned)
+│   ├── labels/                           # Extracted task labels in MEDS-DEV format (not versioned)
+│   └── kmimic_triplet_tensors/           # meds-torch NRT tensors (not versioned)
+├── experiments/
+│   ├── lane_a/
+│   │   ├── preprocess_kmimic.py          # Standalone preprocessing pipeline → NRT tensors
+│   │   ├── configs/
+│   │   │   ├── kmimic_train.yaml         # meds-torch training config (K-MIMIC)
+│   │   │   └── mimic_train.yaml          # meds-torch training config (MIMIC-IV)
+│   │   └── run_lane_a.sh                 # End-to-end Lane A script
+│   ├── lane_b/
+│   │   ├── feature_extract.py            # 24h feature extraction (77 K-MIMIC / 76 MIMIC-IV features)
+│   │   ├── train_xgb.py                  # XGBoost training — within and cross-cohort
+│   │   ├── features/
+│   │   │   ├── kmimic/                   # K-MIMIC feature matrices (versioned)
+│   │   │   └── mimic/                    # MIMIC-IV feature matrices (not versioned — DUA)
+│   │   ├── results/
+│   │   │   ├── metrics.json              # AUROC / AUPRC / Brier point estimates
+│   │   │   ├── bootstrap_ci.json         # 95% bootstrap CIs (n=2000)
+│   │   │   ├── predictions_kmimic_within.parquet
+│   │   │   └── predictions_mimic_to_kmimic.parquet
+│   │   └── run_lane_b.sh                 # End-to-end Lane B script
+│   └── concepts.yaml                     # Shared feature concept definitions
 ├── src/
 │   └── kmimic_meds/
 │       ├── etl/
-│       │   ├── pre_meds.py     # Step 1 — clean raw .xlsx → intermediate .parquet
-│       │   └── meds_convert.py # Step 2 — intermediate .parquet → MEDS dataset
+│       │   ├── pre_meds.py               # Step 1 — clean raw .xlsx → intermediate .parquet
+│       │   └── meds_convert.py           # Step 2 — intermediate .parquet → MEDS dataset
 │       └── utils/
 │           └── io.py
 ├── tests/
-│   └── test_meds_convert.py    # 71 unit tests
-├── validation.ipynb            # Validation notebook (24/24 checks + 3 extended sections)
-├── validate.py                 # CLI validation script (46/46 checks)
-├── extract_labels.py           # Label extraction — in-hospital mortality 24h (MEDS-DEV format)
+│   └── test_meds_convert.py              # 71 unit tests
+├── bootstrap.py                          # Bootstrap CI computation for benchmark metrics
+├── validation.ipynb                      # Validation notebook (24/24 checks + 3 extended sections)
+├── validate.py                           # CLI validation script (46/46 checks)
+├── extract_labels.py                     # Label extraction — in-hospital mortality 24h (MEDS-DEV format)
 ├── pyproject.toml
 └── README.md
 ```
@@ -205,6 +227,50 @@ data/labels/
 ```
 
 Each file contains: `subject_id (int64)` | `prediction_time (timestamp[us])` | `boolean_value (bool)`.
+
+---
+
+## Mortality Prediction Benchmark
+
+The `experiments/` directory contains two benchmark lanes for in-hospital mortality prediction (24h observation window, 81 positives / 957 patients, 8.5% prevalence).
+
+### Lane A — MEDS-native (meds-torch)
+
+Trains a Transformer (token_dim=64, 2 layers, 4 heads, 214K parameters) using [meds-torch 0.0.8](https://github.com/Oufattole/meds-torch).
+
+```bash
+# Preprocess K-MIMIC into NRT tensor format
+python experiments/lane_a/preprocess_kmimic.py
+
+# Train
+meds-torch-train \
+  --config-dir experiments/lane_a/configs \
+  --config-name kmimic_train \
+  'hydra.searchpath=[pkg://meds_torch.configs]'
+```
+
+**Result:** Both configurations (no reweighting and pos_weight=10.8) fail to learn a useful ranking signal (AUROC 0.266 / 0.234), consistent with known deep learning limitations on small clinical cohorts (~65 positive training examples). This constitutes an informative lower bound motivating feature-based methods.
+
+### Lane B — Cross-cohort transfer (XGBoost)
+
+Builds a shared 24h feature representation (73 features shared across K-MIMIC and MIMIC-IV) and trains XGBoost within-dataset and cross-cohort.
+
+```bash
+python experiments/lane_b/feature_extract.py   # extract features
+python experiments/lane_b/train_xgb.py         # train and evaluate
+python bootstrap.py                            # compute 95% CIs
+```
+
+### Results
+
+| Model | Train | AUROC | 95% CI | AUPRC | 95% CI |
+|---|---|---|---|---|---|
+| XGBoost | K-MIMIC | **0.810** | [0.631–0.960] | **0.505** | [0.116–0.826] |
+| XGBoost | MIMIC-IV→K-MIMIC | 0.674 | [0.418–0.900] | 0.287 | [0.066–0.617] |
+| meds-torch | K-MIMIC | 0.266 | — | 0.062 | — |
+| meds-torch+pw | K-MIMIC | 0.234 | — | — | — |
+
+Bootstrap CIs (n=2000) on held-out set (102 patients, 8 positives). The 0.136 AUROC gap between within-dataset and transfer quantifies the vocabulary mismatch cost between MIMIC-IV item IDs and K-MIMIC EDI codes.
 
 ---
 
