@@ -1,0 +1,84 @@
+# Harmonised concept → MEDS code mappings for K-MIMIC and MIMIC-IV.
+#
+# Each numeric_concept entry lists the exact code prefixes to match in the
+# MEDS event stream.  A code matches if it equals the prefix or starts with
+# "{prefix}//".  This handles both bare codes (LAB//220045) and any
+# trailing unit suffix (LAB//220045//bpm).
+#
+# temperature entries carry an optional temp_f flag: those codes are in °F
+# and will be converted to °C before aggregation.
+
+kmimic:
+  numeric_concepts:
+    heart_rate:
+      codes: ["CHARTEVENT//001C_1021_25105"]
+    respiratory_rate:
+      codes: ["CHARTEVENT//001C_1023_27310"]
+    temperature:
+      codes: ["CHARTEVENT//001C_1026_26520"]
+    systolic_bp:
+      codes:
+        - "CHARTEVENT//001C_1012_24795"   # non-invasive SBP
+        - "CHARTEVENT//001C_1015_24795"   # arterial SBP
+    diastolic_bp:
+      codes:
+        - "CHARTEVENT//001C_1013_25640"   # non-invasive DBP
+        - "CHARTEVENT//001C_1016_25640"   # arterial DBP
+    spo2:
+      codes: ["CHARTEVENT//001C_1003_24480"]
+    wbc:
+      codes: ["LAB//001L2001"]
+    hemoglobin:
+      codes: ["LAB//001L2003"]
+    glucose:
+      codes: ["LAB//001L3005"]
+
+  sex_code_prefix: "GENDER"
+  birth_code: "MEDS_BIRTH"
+  event_families:
+    - "CHARTEVENT"
+    - "LAB"
+    - "INPUT_START"
+    - "OUTPUT"
+    - "MEDICATION"
+    - "ICU_ADMISSION"
+    - "PROCEDURE_START"
+  input_prefix: "INPUT_START"
+  output_prefix: "OUTPUT"
+
+
+mimic:
+  numeric_concepts:
+    heart_rate:
+      codes: ["LAB//220045"]
+    respiratory_rate:
+      codes: ["LAB//220210"]
+    temperature:
+      # 223761 = °F  →  converted to °C on the fly
+      # 223762 = °C  →  used as-is
+      codes: ["LAB//223761", "LAB//223762"]
+      temp_f_codes: ["LAB//223761"]
+    systolic_bp:
+      codes: ["LAB//220179"]
+    diastolic_bp:
+      codes: ["LAB//220180"]
+    spo2:
+      codes: ["LAB//220277"]
+    wbc:
+      codes: ["LAB//51301"]
+    hemoglobin:
+      codes: ["LAB//51222"]
+    glucose:
+      codes: ["LAB//50931"]
+
+  sex_code_prefix: "GENDER"
+  birth_code: "MEDS_BIRTH"
+  event_families:
+    - "LAB"
+    - "INFUSION_START"
+    - "SUBJECT_FLUID_OUTPUT"
+    - "MEDICATION"
+    - "PROCEDURE_START"
+    - "PROCEDURE_END"
+  input_prefix: "INFUSION_START"
+  output_prefix: "SUBJECT_FLUID_OUTPUT"

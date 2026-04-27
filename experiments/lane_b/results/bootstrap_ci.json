@@ -1,0 +1,36 @@
+{
+  "XGBoost (K-MIMIC within)": {
+    "auroc": {
+      "point": 0.8098,
+      "ci_lo": 0.6314,
+      "ci_hi": 0.9596
+    },
+    "auprc": {
+      "point": 0.5045,
+      "ci_lo": 0.1163,
+      "ci_hi": 0.8257
+    },
+    "brier": {
+      "point": 0.1298,
+      "ci_lo": 0.106,
+      "ci_hi": 0.1552
+    }
+  },
+  "XGBoost (MIMIC-IV->K-MIMIC)": {
+    "auroc": {
+      "point": 0.6742,
+      "ci_lo": 0.4183,
+      "ci_hi": 0.9001
+    },
+    "auprc": {
+      "point": 0.2866,
+      "ci_lo": 0.0655,
+      "ci_hi": 0.6175
+    },
+    "brier": {
+      "point": 0.201,
+      "ci_lo": 0.1726,
+      "ci_hi": 0.2313
+    }
+  }
+}

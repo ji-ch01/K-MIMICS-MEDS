@@ -2,13 +2,25 @@
 data/raw/
 data/intermediate/
 data/output/
-data/raw/
-data/intermediate/
-data/labels
-data/output/
+data/labels/
+data/MEDS_cohort/
+data/triplet_tensors/
+data/kmimic_triplet_tensors/
+data/mimic_triplet_tensors/
 outputs/
 *.parquet
 *.xlsx
+
+# Experiments — MIMIC-derived features excluded (DUA compliance, large files)
+experiments/lane_b/features/mimic/
+# Model checkpoints (large binaries)
+*.ckpt
+experiments/lane_a/results/
+
+# Allow small versioned artifacts
+!experiments/lane_b/results/*.parquet
+!experiments/lane_b/results/*.json
+!experiments/lane_b/features/kmimic/*.parquet
 
 # Python
 __pycache__/
@@ -54,3 +66,5 @@ check.py
 
 # notes.txt
 notes.txt
+
+.claude

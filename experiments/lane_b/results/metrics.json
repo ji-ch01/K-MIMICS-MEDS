@@ -1,0 +1,182 @@
+[
+  {
+    "name": "kmimic_within",
+    "overall": {
+      "auroc": 0.8098404255319148,
+      "auprc": 0.5045351103605039,
+      "brier": 0.1298457831144333,
+      "n": 102,
+      "n_pos": 8,
+      "prevalence": 0.0784313725490196,
+      "calib_slope": 1.2394812227762466
+    },
+    "subgroups": {
+      "sex_male": {
+        "auroc": 0.6772486772486773,
+        "auprc": 0.11428571428571428,
+        "brier": 0.1206790953874588,
+        "n": 66,
+        "n_pos": 3,
+        "prevalence": 0.045454545454545456,
+        "calib_slope": 0.472155206453025
+      },
+      "sex_female": {
+        "auroc": 0.8838709677419355,
+        "auprc": 0.7388235294117647,
+        "brier": 0.14665137231349945,
+        "n": 36,
+        "n_pos": 5,
+        "prevalence": 0.1388888888888889,
+        "calib_slope": 1.2463511690562314
+      },
+      "age_18-44": {
+        "auroc": 0.7333333333333334,
+        "auprc": 0.2,
+        "brier": 0.13359074294567108,
+        "n": 16,
+        "n_pos": 1,
+        "prevalence": 0.0625,
+        "calib_slope": 0.2399466655477395
+      },
+      "age_45-64": {
+        "auroc": 0.7692307692307692,
+        "auprc": 0.14285714285714285,
+        "brier": 0.08360876888036728,
+        "n": 27,
+        "n_pos": 1,
+        "prevalence": 0.037037037037037035,
+        "calib_slope": 0.21070322296643304
+      },
+      "age_65-74": {
+        "auroc": 1.0,
+        "auprc": 1.0,
+        "brier": 0.1422201544046402,
+        "n": 27,
+        "n_pos": 1,
+        "prevalence": 0.037037037037037035,
+        "calib_slope": 0.9120491936824892
+      },
+      "age_75+": {
+        "auroc": 0.75,
+        "auprc": 0.5071428571428571,
+        "brier": 0.1482074111700058,
+        "n": 23,
+        "n_pos": 4,
+        "prevalence": 0.17391304347826086,
+        "calib_slope": 0.9168962013094641
+      }
+    },
+    "feature_importance_top20": {
+      "heart_rate_first": "0.056713473",
+      "heart_rate_mean": "0.046927597",
+      "spo2_first": "0.036778033",
+      "heart_rate_max": "0.03398924",
+      "hemoglobin_max": "0.032653358",
+      "respiratory_rate_mean": "0.031604785",
+      "temperature_last": "0.031288166",
+      "systolic_bp_count": "0.024540024",
+      "systolic_bp_last": "0.024206148",
+      "respiratory_rate_first": "0.023845444",
+      "hemoglobin_mean": "0.022959827",
+      "wbc_first": "0.022725595",
+      "diastolic_bp_first": "0.02209449",
+      "respiratory_rate_max": "0.021689795",
+      "respiratory_rate_min": "0.02101454",
+      "n_inputstart": "0.019899497",
+      "n_lab": "0.019667845",
+      "total_output": "0.019492699",
+      "total_input": "0.01924195",
+      "age": "0.017943058"
+    }
+  },
+  {
+    "name": "mimic_to_kmimic",
+    "overall": {
+      "auroc": 0.6742021276595744,
+      "auprc": 0.28662499397793517,
+      "brier": 0.20098978281021118,
+      "n": 102,
+      "n_pos": 8,
+      "prevalence": 0.0784313725490196,
+      "calib_slope": 0.727781755479511
+    },
+    "subgroups": {
+      "sex_male": {
+        "auroc": 0.5820105820105821,
+        "auprc": 0.09015151515151515,
+        "brier": 0.20870791375637054,
+        "n": 66,
+        "n_pos": 3,
+        "prevalence": 0.045454545454545456,
+        "calib_slope": 0.20939457737156084
+      },
+      "sex_female": {
+        "auroc": 0.7354838709677419,
+        "auprc": 0.5645833333333334,
+        "brier": 0.18683989346027374,
+        "n": 36,
+        "n_pos": 5,
+        "prevalence": 0.1388888888888889,
+        "calib_slope": 0.9315794329249624
+      },
+      "age_18-44": {
+        "auroc": 0.8,
+        "auprc": 0.25,
+        "brier": 0.07980310916900635,
+        "n": 16,
+        "n_pos": 1,
+        "prevalence": 0.0625,
+        "calib_slope": 0.20278652568620628
+      },
+      "age_45-64": {
+        "auroc": 0.11538461538461542,
+        "auprc": 0.041666666666666664,
+        "brier": 0.13569945096969604,
+        "n": 27,
+        "n_pos": 1,
+        "prevalence": 0.037037037037037035,
+        "calib_slope": -0.39134745236699464
+      },
+      "age_65-74": {
+        "auroc": 0.6153846153846154,
+        "auprc": 0.09090909090909091,
+        "brier": 0.21652330458164215,
+        "n": 27,
+        "n_pos": 1,
+        "prevalence": 0.037037037037037035,
+        "calib_slope": 0.13195548582180383
+      },
+      "age_75+": {
+        "auroc": 0.6578947368421053,
+        "auprc": 0.3353386809269162,
+        "brier": 0.291446328163147,
+        "n": 23,
+        "n_pos": 4,
+        "prevalence": 0.17391304347826086,
+        "calib_slope": 0.5082374110021375
+      }
+    },
+    "feature_importance_top20": {
+      "n_lab": "0.10541958",
+      "age": "0.057995748",
+      "n_events_total": "0.049720723",
+      "hemoglobin_mean": "0.03150117",
+      "sex_male": "0.030639557",
+      "respiratory_rate_mean": "0.029782701",
+      "hemoglobin_max": "0.026902787",
+      "glucose_count": "0.02672015",
+      "wbc_min": "0.024787564",
+      "hemoglobin_first": "0.024173507",
+      "wbc_mean": "0.024167975",
+      "hemoglobin_min": "0.02217805",
+      "n_medication": "0.019912042",
+      "wbc_count": "0.019136133",
+      "systolic_bp_min": "0.018856414",
+      "total_output": "0.018786259",
+      "hemoglobin_count": "0.017642397",
+      "wbc_last": "0.017550878",
+      "heart_rate_max": "0.016546546",
+      "hemoglobin_last": "0.01584329"
+    }
+  }
+]

@@ -1,0 +1,68 @@
+# @package _global_
+# meds-torch 0.0.8 training config — K-MIMIC within-dataset benchmark (Lane A).
+#
+# Run from the repo root:
+#   meds-torch-train \
+#     --config-dir experiments/lane_a/configs \
+#     --config-name kmimic_train \
+#     'hydra.searchpath=[pkg://meds_torch.configs]'
+
+defaults:
+  - data: pytorch_dataset
+  - model: supervised
+  - callbacks: default
+  - logger: null
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+  - experiment: null
+  - hparams_search: null
+  - optional local: default
+  - debug: null
+  - _self_      # LAST — so values below override all loaded defaults
+
+seed: 42
+name: "train"
+train: true      # run trainer.fit()
+test: true       # run trainer.test() on held_out after training
+task_name: kmimic_inhospital_mortality_24h
+tags: ["lane_a", "kmimic", "supervised"]
+
+extras:
+  enforce_tags: false
+  print_config: true
+
+# ---- Paths ------------------------------------------------------------------
+paths:
+  data_dir: data/kmimic_triplet_tensors
+  meds_cohort_dir: data/output
+  output_dir: experiments/lane_a/results/kmimic
+
+# ---- Data -------------------------------------------------------------------
+data:
+  task_root_dir: data/labels
+  task_name: inhospital_mortality_24h
+  max_seq_len: 256
+  dataloader:
+    batch_size: 32
+    num_workers: 0
+
+# ---- Model ------------------------------------------------------------------
+model:
+  token_dim: 64
+  backbone:
+    nheads: 4
+    dropout: 0.1
+    model:
+      attn_layers:
+        attn_flash: false   # flash attention requires CUDA — must be false for CPU
+
+# ---- Trainer ----------------------------------------------------------------
+trainer:
+  max_epochs: 30
+  accelerator: cpu
+  devices: 1
+  check_val_every_n_epoch: 5
+  log_every_n_steps: 5
+  deterministic: false
